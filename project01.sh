@@ -6,6 +6,7 @@ input_folder="."
 output_folder="."
 executables=()
 pids=()
+proc_pids=()
 
 # ------------ Functions ------------
 
@@ -135,9 +136,11 @@ get_process_metrics() {
             cpu=$(ps -p "$pid" -o %cpu=)
             mem=$(ps -p "$pid" -o %mem=)
 
-            append_to_file "$file_name" "$(date +%s),$cpu,$mem"
+            append_to_file "$file_name" "$((SECONDS-1)),$cpu,$mem"
             sleep 5
-        done
+        done &
+
+        proc_pids+=( $! )
     done
 }
 
@@ -153,16 +156,32 @@ get_system_metrics() {
         disk_writes=$(iostat -d -k 1 2 | awk 'NR==2{print $4}')
         disk_capacity=$(df -m / | awk 'NR==2{print $4}')
 
-        append_to_file "$file_name" "$(date +%s),$rx,$tx,$disk_writes,$disk_capacity"
+        append_to_file "$file_name" "$((SECONDS-1)),$rx,$tx,$disk_writes,$disk_capacity"
         sleep 5
-    done
+    done &
+
+    proc_pids+=( $! )
 }
 
 ## Clean up when the script is terminated ##
 cleanup() {
+    echo "Cleaning up c executable processes..."
+
     for pid in "${pids[@]}"; do
         kill "$pid"
     done
+
+    echo "C executables processes killed."
+    echo
+
+    echo "Cleaning up child processes..."
+
+    for pid in "${proc_pids[@]}"; do
+        kill "$pid"
+    done
+
+    echo "Child processes killed."
+    echo
 }
 
 # ------------ Start of Script ------------
