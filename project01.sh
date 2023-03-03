@@ -6,6 +6,7 @@ input_folder="."
 output_folder="."
 executables=()
 pids=()
+proc_pids=()
 
 # ------------ Functions ------------
 
@@ -26,15 +27,23 @@ get_nic() {
 install_deps() {
     if ! command -v ifstat &>/dev/null; then
         echo "ifstat not found. Installing it..."
-        sudo yum install -y ifstat
+        sudo dnf install -y ifstat
         echo "ifstat installed correctly."
     fi
 
-    if ! command -v ifstat &>/dev/null; then
-        echo "ifstat not found. Installing it..."
-        sudo yum install -y ifstat
-        echo "ifstat installed correctly."
+    if ! command -v iostat &>/dev/null; then
+        echo "sysstat not found. Installing it..."
+        sudo dnf install -y sysstat
+        echo "sysstat installed correctly."
     fi
+
+    if ! command -v gcc &>/dev/null; then
+        echo "gcc not found. Installing it..."
+        sudo dnf install -y gcc
+        echo "gcc installed correctly."
+    fi
+
+    echo
 }
 
 ## Show an help dialog when running the script with the -h or --help flag ##
@@ -56,11 +65,15 @@ show_help_message() {
 ## Loop through the input folder for all c files and compile them ##
 ## The executable name will be the name of the c file without extension ##
 compile_c_scripts() {
+    echo "Compiling c scripts..."
     for file in "$input_folder"/*.c; do
         local output_file_name="${file%.*}"
         gcc "$file" -o "$output_file_name"
         executables+=( "$output_file_name" )
+        echo "  $output_file_name compiled"
     done
+    echo "All c scripts compiled."
+    echo
 }
 
 ## Parse through flags ##
@@ -76,7 +89,11 @@ parse_flags() {
                 if [ ! -d "$output_folder" ]; then
                     mkdir -p "$output_folder"
                     echo "Output folder: $output_folder"
+                else
+                    rm -r "$output_folder"/*
+                    
                 fi
+                echo "Selected output folder: $output_folder"
                 shift 2
                 ;;
             -i|--input)
@@ -89,7 +106,7 @@ parse_flags() {
                     echo "Input folder not found"
                     exit 1
                 fi
-                echo "Input folder: $input_folder"
+                echo "Selected input folder: $input_folder"
                 shift 2
                 ;;
             *)
@@ -99,22 +116,27 @@ parse_flags() {
         esac
     done
     set -- "$@"
+
+    echo
 }
 
 ## Loop through the executables and run them in the background ##
 start_processes() {
     local nic=$(get_nic)
+    echo "NIC found: $nic"
 
     if [ ${#executables[@]} -eq 0 ]; then
         echo "Error: No C executables provided."
         exit 1
     fi
 
-    for executable in "$executables"; do
-        ./$executable "$nic" &
-        echo "$executable started"
+    echo "Starting executables..."
+    for executable in "${executables[@]}"; do
+        ./"$executable" "$nic" &
         pids+=( $! )
+        echo "  $executable ($!) started."
     done
+    echo
 }
 
 ## Append text to file in the output directory ##
@@ -131,6 +153,10 @@ get_process_metrics() {
     for pid in "${pids[@]}"; do
         proc_name=$(ps -p "$pid" -o comm=)
 
+        if [[ -z "$proc_name" ]]; then
+            continue
+        fi
+
         file_name="${proc_name}_metrics.csv"
         echo "seconds,%CPU,%memory" > "$output_folder/$file_name"
         echo "File created: $file_name"
@@ -139,9 +165,11 @@ get_process_metrics() {
             cpu=$(ps -p "$pid" -o %cpu=)
             mem=$(ps -p "$pid" -o %mem=)
 
-            append_to_file "$file_name" "$SECONDS,$cpu,$mem"
+            append_to_file "$file_name" "$((SECONDS-1)),$cpu,$mem"
             sleep 5
-        done
+        done &
+
+        proc_pids+=( $! )
     done
 }
 
@@ -154,30 +182,43 @@ get_system_metrics() {
     echo "File created $file_name"
 
     while true; do
-        rx=$(ifstat -q 1 1 | awk 'NR==3{print $1}')
-        tx=$(ifstat -q 1 1 | awk 'NR==3{print $2}')
-        disk_writes=$(ifstat -d -k 1 2 | awk 'NR==2{print $4}')
+        rx=$(ifstat -t 5 ens192 | awk 'NR==4{print $4}')
+        tx=$(ifstat -t 5 ens192 | awk 'NR==4{print $8}')
+        disk_writes=$(iostat -d -k 1 2 | awk 'NR==2{print $4}')
         disk_capacity=$(df -m / | awk 'NR==2{print $4}')
 
-        append_to_file "$file_name" "$SECONDS,$rx,$tx,$disk_writes,$disk_capacity"
+        append_to_file "$file_name" "$((SECONDS-1)),$rx,$tx,$disk_writes,$disk_capacity"
         sleep 5
-    done
+    done &
+
+    proc_pids+=( $! )
 }
 
 ## Clean up when the script is terminated ##
 cleanup() {
-    echo
-    echo "Cleaning up..."
+    echo "Cleaning up c executable processes..."
+
     for pid in "${pids[@]}"; do
         kill "$pid"
         echo "$pid: Stopped"
     done
+
+    echo "C executables processes killed."
+    echo
+
+    echo "Cleaning up child processes..."
+
+    for pid in "${proc_pids[@]}"; do
+        kill "$pid"
+    done
+
+    echo "Child processes killed."
     echo
 }
 
 # ------------ Start of Script ------------
 
-trap cleanup INT TERM
+trap cleanup SIGINT SIGTERM ERR EXIT
 
 parse_flags "$@"
 
@@ -186,8 +227,10 @@ compile_c_scripts
 
 start_processes
 
-# get_process_metrics &
-# get_system_metrics &
+echo "get_process_metrics starting..."
+get_process_metrics &
+echo "get_system_metrics starting..."
+get_system_metrics &
 
 wait
 
