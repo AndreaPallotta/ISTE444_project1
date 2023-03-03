@@ -151,6 +151,10 @@ get_process_metrics() {
     for pid in "${pids[@]}"; do
         proc_name=$(ps -p "$pid" -o comm=)
 
+        if [[ -z "$proc_name" ]]; then
+            continue
+        fi
+
         file_name="${proc_name}_metrics.csv"
         echo "seconds,%CPU,%memory" > "$output_folder/$file_name"
 
