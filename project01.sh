@@ -42,6 +42,8 @@ install_deps() {
         sudo dnf install -y gcc
         echo "gcc installed correctly."
     fi
+
+    echo
 }
 
 ## Show an help dialog when running the script with the -h or --help flag ##
@@ -87,7 +89,7 @@ parse_flags() {
                 if [ ! -d "$output_folder" ]; then
                     mkdir -p "$output_folder"
                 else
-                    rm -r "$output_folder/*"
+                    rm -r "$output_folder"/*
                 fi
                 echo "Selected output folder: $output_folder"
                 shift 2
