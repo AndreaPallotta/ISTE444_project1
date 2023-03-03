@@ -32,9 +32,9 @@ install_deps() {
     fi
 
     if ! command -v iostat &>/dev/null; then
-        echo "iostat not found. Installing it..."
-        sudo yum install -y iostat
-        echo "iostat installed correctly."
+        echo "sysstat not found. Installing it..."
+        sudo yum install -y sysstat
+        echo "sysstat installed correctly."
     fi
 
     if ! command -v gcc &>/dev/null; then
@@ -82,6 +82,8 @@ parse_flags() {
                 output_folder="$2"
                 if [ ! -d "$output_folder" ]; then
                     mkdir -p "$output_folder"
+                else
+                    rm -r "$output_folder/*"
                 fi
                 shift 2
                 ;;
