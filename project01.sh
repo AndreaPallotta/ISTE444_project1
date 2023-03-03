@@ -36,6 +36,12 @@ install_deps() {
         sudo yum install -y iostat
         echo "iostat installed correctly."
     fi
+
+    if ! command -v gcc &>/dev/null; then
+        echo "gcc not found. Installing it..."
+        sudo yum install -y gcc
+        echo "gcc installed correctly."
+    fi
 }
 
 ## Show an help dialog when running the script with the -h or --help flag ##
@@ -151,8 +157,8 @@ get_system_metrics() {
     echo "seconds,RX data rate,TX data rate,disk writes,available disk capacity" > "$output_folder/$file_name"
 
     while true; do
-        rx=$(ifstat -q 1 1 | awk 'NR==3{print $1}')
-        tx=$(ifstat -q 1 1 | awk 'NR==3{print $2}')
+        rx=$(ifstat -t 5 ens192 | awk 'NR==4{print $4}')
+        tx=$(ifstat -t 5 ens192 | awk 'NR==4{print $8}')
         disk_writes=$(iostat -d -k 1 2 | awk 'NR==2{print $4}')
         disk_capacity=$(df -m / | awk 'NR==2{print $4}')
 
