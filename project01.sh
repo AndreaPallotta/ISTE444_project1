@@ -108,7 +108,7 @@ start_processes() {
         exit 1
     fi
 
-    for executable in "$executables"; do
+    for executable in "$executables[@]"; do
         ./"$executable" "$nic" &
         pids+=( $! )
     done
