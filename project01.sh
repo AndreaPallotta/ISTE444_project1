@@ -212,7 +212,7 @@ cleanup() {
 
 # ------------ Start of Script ------------
 
-trap cleanup INT TERM
+trap cleanup SIGINT SIGTERM ERR EXIT
 
 parse_flags "$@"
 
