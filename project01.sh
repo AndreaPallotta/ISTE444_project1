@@ -9,6 +9,19 @@ pids=()
 
 # ------------ Functions ------------
 
+get_nic() {
+    # local nic=$(ip addr show dev eth2 | grep -E -o "([0-9]{1,3}\.){3}[0-9]{1,3}" | head -n 1)
+    # if echo "$nic" | grep -E -q "^([0-9]{1,3}\.){3}[0-9]{1,3}$"; then
+    #     nic=$(hostname -I | awk '{print $1}')
+    # fi
+
+    # echo "$nic"
+
+    nic=$(hostname -I | awk '{print $1}')
+
+    echo $nic
+}
+
 ## Install dependencies neeeded to retrieve data ##
 install_deps() {
     if ! command -v ifstat &>/dev/null; then
@@ -21,12 +34,6 @@ install_deps() {
         echo "iostat not found. Installing it..."
         sudo yum install -y iostat
         echo "iostat installed correctly."
-    fi
-
-    if ! command -v gcc &>/dev/null; then
-        echo "gcc not found. Installing it..."
-        sudo yum install -y gcc
-        echo "gcc installed correctly."
     fi
 }
 
@@ -66,7 +73,6 @@ parse_flags() {
                 ;;
             -o|--output)
                 output_folder="$2"
-                echo $output_folder
                 if [ ! -d "$output_folder" ]; then
                     mkdir -p "$output_folder"
                 fi
@@ -78,7 +84,6 @@ parse_flags() {
                     exit 1
                 fi
                 input_folder="$2"
-                echo $input_folder
                 if [ ! -d "$input_folder" ]; then
                     echo "Input folder not found"
                     exit 1
@@ -96,13 +101,15 @@ parse_flags() {
 
 ## Loop through the executables and run them in the background ##
 start_processes() {
+    local nic=$(get_nic)
+
     if [ ${#executables[@]} -eq 0 ]; then
         echo "Error: No C executables provided."
         exit 1
     fi
 
     for executable in "$executables"; do
-        ./"$executable" &
+        ./"$executable" "$nic" &
         pids+=( $! )
     done
 }
