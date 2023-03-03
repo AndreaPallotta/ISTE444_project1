@@ -127,7 +127,7 @@ start_processes() {
     fi
 
     echo "Starting executables..."
-    for executable in "$executables[@]"; do
+    for executable in "${executables[@]}"; do
         ./"$executable" "$nic" &
         pids+=( $! )
         echo "  $executable ($!) started."
@@ -206,7 +206,7 @@ cleanup() {
 
 # ------------ Start of Script ------------
 
-trap cleanup -
+trap cleanup INT TERM
 
 parse_flags "$@"
 
