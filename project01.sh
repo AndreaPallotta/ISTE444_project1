@@ -22,6 +22,12 @@ install_deps() {
         sudo yum install -y iostat
         echo "iostat installed correctly."
     fi
+
+    if ! command -v gcc &>/dev/null; then
+        echo "gcc not found. Installing it..."
+        sudo yum install -y gcc
+        echo "gcc installed correctly."
+    fi
 }
 
 ## Show an help dialog when running the script with the -h or --help flag ##
@@ -52,30 +58,40 @@ compile_c_scripts() {
 
 ## Parse through flags ##
 parse_flags() {
-    for arg in "$@"; do
-        case $arg in
+    while [[ $# -gt 0 ]]; do
+        case $1 in
             -h|--help)
                 show_help_message
                 exit 0
                 ;;
             -o|--output)
-                output_folder="$arg"
+                output_folder="$2"
+                echo $output_folder
                 if [ ! -d "$output_folder" ]; then
                     mkdir -p "$output_folder"
                 fi
+                shift 2
                 ;;
             -i|--input)
-                input_folder="$arg"
+                if [ -z "$2" ] || [[ "$2" == -* ]]; then
+                    echo "Input folder not specified"
+                    exit 1
+                fi
+                input_folder="$2"
+                echo $input_folder
                 if [ ! -d "$input_folder" ]; then
                     echo "Input folder not found"
                     exit 1
                 fi
+                shift 2
                 ;;
             *)
-                echo "Unknown flag: $arg"
+                echo "Unknown flag: $1"
+                shift
                 ;;
         esac
     done
+    set -- "$@"
 }
 
 ## Loop through the executables and run them in the background ##
