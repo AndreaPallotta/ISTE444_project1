@@ -27,19 +27,19 @@ get_nic() {
 install_deps() {
     if ! command -v ifstat &>/dev/null; then
         echo "ifstat not found. Installing it..."
-        sudo yum install -y ifstat
+        sudo dnf install -y ifstat
         echo "ifstat installed correctly."
     fi
 
     if ! command -v iostat &>/dev/null; then
         echo "sysstat not found. Installing it..."
-        sudo yum install -y sysstat
+        sudo dnf install -y sysstat
         echo "sysstat installed correctly."
     fi
 
     if ! command -v gcc &>/dev/null; then
         echo "gcc not found. Installing it..."
-        sudo yum install -y gcc
+        sudo dnf install -y gcc
         echo "gcc installed correctly."
     fi
 }
@@ -63,11 +63,15 @@ show_help_message() {
 ## Loop through the input folder for all c files and compile them ##
 ## The executable name will be the name of the c file without extension ##
 compile_c_scripts() {
+    echo "Compiling c scripts..."
     for file in "$input_folder"/*.c; do
         local output_file_name="${file%.*}"
         gcc "$file" -o "$output_file_name"
         executables+=( "$output_file_name" )
+        echo "  $output_file_name compiled"
     done
+    echo "All c scripts compiled."
+    echo
 }
 
 ## Parse through flags ##
@@ -85,6 +89,7 @@ parse_flags() {
                 else
                     rm -r "$output_folder/*"
                 fi
+                echo "Selected output folder: $output_folder"
                 shift 2
                 ;;
             -i|--input)
@@ -97,6 +102,7 @@ parse_flags() {
                     echo "Input folder not found"
                     exit 1
                 fi
+                echo "Selected input folder: $input_folder"
                 shift 2
                 ;;
             *)
@@ -106,21 +112,27 @@ parse_flags() {
         esac
     done
     set -- "$@"
+
+    echo
 }
 
 ## Loop through the executables and run them in the background ##
 start_processes() {
     local nic=$(get_nic)
+    echo "NIC found: $nic"
 
     if [ ${#executables[@]} -eq 0 ]; then
         echo "Error: No C executables provided."
         exit 1
     fi
 
+    echo "Starting executables..."
     for executable in "$executables[@]"; do
         ./"$executable" "$nic" &
         pids+=( $! )
+        echo "  $executable ($!) started."
     done
+    echo
 }
 
 ## Append text to file in the output directory ##
@@ -194,7 +206,7 @@ cleanup() {
 
 # ------------ Start of Script ------------
 
-trap cleanup INT TERM
+trap cleanup -
 
 parse_flags "$@"
 
@@ -203,7 +215,9 @@ compile_c_scripts
 
 start_processes
 
+echo "get_process_metrics starting..."
 get_process_metrics &
+echo "get_system_metrics starting..."
 get_system_metrics &
 
 wait
