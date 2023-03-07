@@ -146,10 +146,10 @@ get_process_metrics() {
         echo "seconds,%CPU,%memory" > "$output_folder/$file_name"
 
         while true; do
-            cpu=$(ps -p "$pid" -o %cpu=)
-            mem=$(ps -p "$pid" -o %mem=)
+            cpu=$(ps -p "$pid" -o %cpu= | sed 's/ //g')
+            mem=$(ps -p "$pid" -o %mem= | sed 's/ //g')
 
-            append_to_file "$file_name" "$((SECONDS-1)),$cpu,$mem"
+            append_to_file "$file_name" "$((SECONDS)),$cpu,$mem"
             sleep 5
         done &
 
@@ -171,7 +171,7 @@ get_system_metrics() {
         disk_writes=$(iostat -d -o JSON | jq '.sysstat.hosts[0].statistics[0].disk[] | select(.disk_device == "sda") | .["kB_wrtn/s"]')
         disk_capacity=$(df -m / | awk 'NR==2{print $4}')
 
-        append_to_file "$file_name" "$((SECONDS-1)),$rx,$tx,$disk_writes,$disk_capacity"
+        append_to_file "$file_name" "$((SECONDS)),$rx,$tx,$disk_writes,$disk_capacity"
         sleep 5
     done &
 
