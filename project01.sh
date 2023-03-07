@@ -10,19 +10,6 @@ proc_pids=()
 
 # ------------ Functions ------------
 
-get_nic() {
-    # local nic=$(ip addr show dev eth2 | grep -E -o "([0-9]{1,3}\.){3}[0-9]{1,3}" | head -n 1)
-    # if echo "$nic" | grep -E -q "^([0-9]{1,3}\.){3}[0-9]{1,3}$"; then
-    #     nic=$(hostname -I | awk '{print $1}')
-    # fi
-
-    # echo "$nic"
-
-    nic=$(hostname -I | awk '{print $1}')
-
-    echo $nic
-}
-
 ## Install dependencies neeeded to retrieve data ##
 install_deps() {
     if ! command -v ifstat &>/dev/null; then
@@ -88,10 +75,8 @@ parse_flags() {
                 output_folder="$2"
                 if [ ! -d "$output_folder" ]; then
                     mkdir -p "$output_folder"
-                    echo "Output folder: $output_folder"
                 else
                     rm -r "$output_folder"/*
-                    
                 fi
                 echo "Selected output folder: $output_folder"
                 shift 2
@@ -122,7 +107,7 @@ parse_flags() {
 
 ## Loop through the executables and run them in the background ##
 start_processes() {
-    local nic=$(get_nic)
+    local nic=$(hostname -I | awk '{print $1}')
     echo "NIC found: $nic"
 
     if [ ${#executables[@]} -eq 0 ]; then
@@ -159,7 +144,6 @@ get_process_metrics() {
 
         file_name="${proc_name}_metrics.csv"
         echo "seconds,%CPU,%memory" > "$output_folder/$file_name"
-        echo "File created: $file_name"
 
         while true; do
             cpu=$(ps -p "$pid" -o %cpu=)
@@ -178,13 +162,13 @@ get_system_metrics() {
     local file_name="system_metrics.csv"
 
     echo "seconds,RX data rate,TX data rate,disk writes,available disk capacity" > "$output_folder/$file_name"
-    echo
-    echo "File created $file_name"
+
+    ifstat ens192 -d 1
 
     while true; do
-        rx=$(ifstat -t 5 ens192 | awk 'NR==4{print $4}')
-        tx=$(ifstat -t 5 ens192 | awk 'NR==4{print $8}')
-        disk_writes=$(iostat -d -k 1 2 | awk 'NR==2{print $4}')
+        rx=$(ifstat ens192 -j | jq 'keys[0] as $key | .[$key].ens192.rx_bytes/1024' | xargs printf "%.2f")
+        tx=$(ifstat ens192 -j | jq 'keys[0] as $key | .[$key].ens192.tx_bytes/1024' | xargs printf "%.2f")
+        disk_writes=$(iostat -d -o JSON | jq '.sysstat.hosts[0].statistics[0].disk[] | select(.disk_device == "sda") | .["kB_wrtn/s"]')
         disk_capacity=$(df -m / | awk 'NR==2{print $4}')
 
         append_to_file "$file_name" "$((SECONDS-1)),$rx,$tx,$disk_writes,$disk_capacity"
@@ -200,7 +184,6 @@ cleanup() {
 
     for pid in "${pids[@]}"; do
         kill "$pid"
-        echo "$pid: Stopped"
     done
 
     echo "C executables processes killed."
@@ -214,11 +197,22 @@ cleanup() {
 
     echo "Child processes killed."
     echo
+
+    echo "Cleaning ifstat..."
+
+    ifstat_pid=$(pgrep ifstat)
+
+    if [[ -n "$ifstat_pid" ]]; then
+        kill $ifstat_pid
+        echo "ifstat killed."
+    else
+        echo "ifstat not running. Skipping..."
+    fi
 }
 
 # ------------ Start of Script ------------
 
-trap cleanup SIGINT SIGTERM ERR EXIT
+trap cleanup EXIT
 
 parse_flags "$@"
 
