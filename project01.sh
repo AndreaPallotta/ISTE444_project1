@@ -163,7 +163,7 @@ get_system_metrics() {
 
     echo "seconds,RX data rate,TX data rate,disk writes,available disk capacity" > "$output_folder/$file_name"
 
-    ifstat ens192 -d 1
+    ifstat ens192 -d 1 2> /dev/null
 
     while true; do
         rx=$(ifstat ens192 -j | jq 'keys[0] as $key | .[$key].ens192.rx_bytes/1024' | xargs printf "%.2f")
